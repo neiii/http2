@@ -1,13 +1,14 @@
 # FAIM's patches to http2
 
-This directory is the `http2` crate's 0.5.20 release from crates.io, byte for byte
+This is FAIM's fork of the `http2` crate (0x676e67/http2, the HTTP/2 stack `wreq` uses).
+Branch `faim` is the `v0.5.20` tag, whose `src/` matches the 0.5.20 release on crates.io
 (`http2-0.5.20.crate`, sha256
-`92d3114be2f413b2e491e686b93a28cda30c355cffc8d091a57f8be4b1342896`), with the changes
-below. The workspace's `[patch.crates-io]` puts it in place of the release, and
-`[workspace] exclude` keeps it out of the workspace's lints. FAIM's upstream leg runs
-on it to send a client's own HTTP/2 bytes (ADR-0011).
+`92d3114be2f413b2e491e686b93a28cda30c355cffc8d091a57f8be4b1342896`), plus the changes
+below. faim-http's `[patch.crates-io]` pins a commit of this branch in place of the
+release. FAIM's upstream leg runs on it to send a client's own HTTP/2 bytes (ADR-0011).
 
-Each change is its own commit after the import, so `git log -- vendor/http2` lists them.
+Each change is its own commit after the tag, so `git log v0.5.20..faim` lists them, and a
+change to this branch gets a person's review, as faim-http's REVIEW.md asks of the pin.
 
 ## A GOAWAY refuses only the streams above the id it names (#451)
 
@@ -27,7 +28,7 @@ streams between the two, and curl does, so FAIM must be able to send them.
 - The connection closes on idle after a `GOAWAY` only when it names an id below the
   highest.
 
-FAIM's test of it is in `crates/faim-daemon/tests/integration/emulation.rs`: a stream
+FAIM's test of it is in faim-http's `crates/faim-daemon/tests/integration/emulation.rs`: a stream
 opened between a server's two `GOAWAY`s is answered over the same connection. The
 release's own test suite isn't part of the published crate, so it doesn't run here.
 
