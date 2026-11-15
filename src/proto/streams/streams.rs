@@ -118,6 +118,28 @@ struct Actions {
     go_away: Option<proto::Error>,
 }
 
+/// FAIM (#490): see [`Streams::recv_windows`].
+#[derive(Debug, Clone)]
+pub(crate) struct RecvWindows {
+    inner: std::sync::Weak<Mutex<Inner>>,
+}
+
+impl RecvWindows {
+    /// Grows stream `id`'s receive window, and the capacity this side may announce, by
+    /// `increment`, writing no WINDOW_UPDATE: the peer has been told by other means.
+    pub fn grow(&self, id: StreamId, increment: WindowSize) -> Result<(), crate::Error> {
+        let inner = self.inner.upgrade().ok_or(UserError::InactiveStreamId)?;
+        let mut me = inner.lock();
+        let me = &mut *me;
+        let mut stream = me
+            .store
+            .find_mut(&id)
+            .ok_or(UserError::InactiveStreamId)?;
+        stream.recv_flow.grow_window(increment)?;
+        Ok(())
+    }
+}
+
 /// Contains the buffer of frames to be written to the wire.
 #[derive(Debug)]
 struct SendBuffer<B> {
@@ -139,6 +161,14 @@ where
             send_buffer: Arc::new(SendBuffer::new()),
 
             _p: ::std::marker::PhantomData,
+        }
+    }
+
+    /// FAIM (#490): a handle that grows streams' receive windows. It holds the
+    /// connection's state weakly, so unlike a clone it doesn't keep the connection open.
+    pub fn recv_windows(&self) -> RecvWindows {
+        RecvWindows {
+            inner: Arc::downgrade(&self.inner),
         }
     }
 

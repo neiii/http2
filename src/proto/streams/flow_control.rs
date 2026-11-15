@@ -84,6 +84,20 @@ impl FlowControl {
         self.available.increase_by(capacity)
     }
 
+    /// FAIM (#490): grows the window the peer may send into, and the capacity this side
+    /// may announce, both by `sz`, without a WINDOW_UPDATE to announce it: the peer has
+    /// been told by other means. Neither grows when either would pass its largest.
+    pub fn grow_window(&mut self, sz: WindowSize) -> Result<(), Reason> {
+        let window_size = self.window_size.add(sz)?;
+        if window_size.0 > MAX_WINDOW_SIZE as i32 {
+            return Err(Reason::FLOW_CONTROL_ERROR);
+        }
+        let available = self.available.add(sz)?;
+        self.window_size = window_size;
+        self.available = available;
+        Ok(())
+    }
+
     /// If a WINDOW_UPDATE frame should be sent, returns a positive number
     /// representing the increment to be used.
     ///

@@ -14,7 +14,7 @@ mod sync;
 pub(crate) use self::prioritize::Prioritized;
 pub(crate) use self::recv::Open;
 pub(crate) use self::send::PollReset;
-pub(crate) use self::streams::{DynStreams, OpaqueStreamRef, StreamRef, Streams};
+pub(crate) use self::streams::{DynStreams, OpaqueStreamRef, RecvWindows, StreamRef, Streams};
 
 use self::buffer::Buffer;
 use self::counts::Counts;
