@@ -363,12 +363,45 @@ pub struct Builder {
 #[derive(Debug)]
 pub(crate) struct Peer;
 
+/// FAIM (#490): grows the receive windows of the streams a [`SendRequest`]'s connection
+/// opened, writing no `WINDOW_UPDATE`.
+///
+/// For a peer that was told of the growth by other means: a proxy that sends the server
+/// its client's own `WINDOW_UPDATE` frames grows its stack's windows by the same amounts.
+/// It holds the connection weakly, so it doesn't keep the connection open as a
+/// [`SendRequest`] does.
+#[derive(Debug, Clone)]
+pub struct RecvWindows {
+    inner: proto::RecvWindows,
+}
+
+impl RecvWindows {
+    /// Grows the receive window of the stream `stream` by `increment`, and the capacity
+    /// the connection may announce on it with it, so the stack neither refuses the data
+    /// the peer may now send nor announces the growth again.
+    ///
+    /// # Errors
+    ///
+    /// When the connection or the stream is gone, or the window would pass 2^31 - 1.
+    pub fn grow(&self, stream: u32, increment: u32) -> Result<(), crate::Error> {
+        self.inner.grow(StreamId::from(stream), increment)
+    }
+}
+
 // ===== impl SendRequest =====
 
 impl<B> SendRequest<B>
 where
     B: Buf,
 {
+    /// FAIM (#490): the handle that grows the receive windows of this connection's
+    /// streams. See [`RecvWindows`].
+    pub fn recv_windows(&self) -> RecvWindows {
+        RecvWindows {
+            inner: self.inner.recv_windows(),
+        }
+    }
+
     /// Returns `Ready` when the connection can initialize a new HTTP/2
     /// stream.
     ///
