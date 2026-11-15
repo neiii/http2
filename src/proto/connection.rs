@@ -295,7 +295,14 @@ where
                             // This will also handle flushing `self.codec`
                             ready!(self.inner.streams.poll_complete(cx, &mut self.codec))?;
 
-                            if (self.inner.error.is_some()
+                            // A `GOAWAY` naming the highest stream id still
+                            // allows new streams, so the connection stays open for
+                            // them; a later one naming a lower id closes it once idle.
+                            if (self
+                                .inner
+                                .error
+                                .as_ref()
+                                .is_some_and(|frame| frame.last_stream_id() != StreamId::MAX)
                                 || self.inner.go_away.should_close_on_idle())
                                 && !self.inner.streams.has_streams()
                             {

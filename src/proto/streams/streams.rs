@@ -112,6 +112,10 @@ struct Actions {
 
     /// If the connection errors, a copy is kept for any StreamRefs.
     conn_error: Option<proto::Error>,
+
+    /// The latest `GOAWAY` the peer sent, which refuses only the streams above its
+    /// last stream id: a request it still allows may open (RFC 9113 §6.8).
+    go_away: Option<proto::Error>,
 }
 
 /// Contains the buffer of frames to be written to the wire.
@@ -262,7 +266,8 @@ where
         let send_buffer = &mut *send_buffer;
 
         me.actions.ensure_no_conn_error()?;
-        me.actions.send.ensure_next_stream_id()?;
+        let next_id = me.actions.send.ensure_next_stream_id()?;
+        me.actions.ensure_go_away_allows(next_id)?;
 
         // The `pending` argument is provided by the `Client`, and holds
         // a store `Key` of a `Stream` that may have been not been opened
@@ -451,6 +456,7 @@ impl Inner {
                 send: Send::new(&config),
                 task: None,
                 conn_error: None,
+                go_away: None,
             },
             store: Store::new(),
             refs: 1,
@@ -801,7 +807,9 @@ impl Inner {
             }
         });
 
-        actions.conn_error = Some(err);
+        // Streams up to `last_stream_id` may still open: a first `GOAWAY` naming
+        // the highest stream id refuses none (RFC 9113 §6.8).
+        actions.go_away = Some(err);
 
         Ok(())
     }
@@ -1042,7 +1050,8 @@ where
         let me = &mut *me;
 
         me.actions.ensure_no_conn_error()?;
-        me.actions.send.ensure_next_stream_id()?;
+        let next_id = me.actions.send.ensure_next_stream_id()?;
+        me.actions.ensure_go_away_allows(next_id)?;
 
         if let Some(pending) = pending {
             let mut stream = me.store.resolve(pending.key);
@@ -1745,6 +1754,14 @@ impl Actions {
             self.send.ensure_not_idle(id)
         } else {
             self.recv.ensure_not_idle(id)
+        }
+    }
+
+    /// Refuses a stream `id` the peer's `GOAWAY` doesn't allow.
+    fn ensure_go_away_allows(&self, id: StreamId) -> Result<(), proto::Error> {
+        match &self.go_away {
+            Some(err) if !self.send.go_away_allows(id) => Err(err.clone()),
+            _ => Ok(()),
         }
     }
 

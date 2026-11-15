@@ -649,6 +649,11 @@ impl Send {
             .map_err(|_| UserError::OverflowedStreamId)
     }
 
+    /// Whether the peer's `GOAWAY`s, if any, still allow a stream `id`.
+    pub fn go_away_allows(&self, id: StreamId) -> bool {
+        id <= self.max_stream_id
+    }
+
     pub fn may_have_created_stream(&self, id: StreamId) -> bool {
         if let Ok(next_id) = self.next_stream_id {
             // Peer::is_local_init should have been called beforehand
