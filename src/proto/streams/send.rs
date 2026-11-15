@@ -20,6 +20,11 @@ pub(super) struct Send {
     /// Stream identifier to use for next initialized stream.
     next_stream_id: Result<StreamId, StreamIdOverflow>,
 
+    /// Whether a locally initiated stream has taken an ID yet: until one has,
+    /// `next_stream_id` may still be moved up.
+    #[cfg(feature = "unstable")]
+    opened_stream: bool,
+
     /// Any streams with a higher ID are ignored.
     ///
     /// This starts as MAX, but is lowered when a GOAWAY is received.
@@ -55,6 +60,8 @@ impl Send {
             init_window_sz: config.remote_init_window_sz,
             max_stream_id: StreamId::MAX,
             next_stream_id: Ok(config.local_next_stream_id),
+            #[cfg(feature = "unstable")]
+            opened_stream: false,
             prioritize: Prioritize::new(config),
             is_push_enabled: true,
             is_extended_connect_protocol_enabled: false,
@@ -69,13 +76,36 @@ impl Send {
     pub fn open(&mut self) -> Result<StreamId, UserError> {
         let stream_id = self.ensure_next_stream_id()?;
         self.next_stream_id = stream_id.next_id();
+        #[cfg(feature = "unstable")]
+        {
+            self.opened_stream = true;
+        }
         Ok(stream_id)
     }
 
     pub fn reserve_local(&mut self) -> Result<StreamId, UserError> {
         let stream_id = self.ensure_next_stream_id()?;
         self.next_stream_id = stream_id.next_id();
+        #[cfg(feature = "unstable")]
+        {
+            self.opened_stream = true;
+        }
         Ok(stream_id)
+    }
+
+    /// Makes `id` the ID the next locally initiated stream opens with.
+    ///
+    /// Refused, leaving the numbering as it was, once a stream has taken an
+    /// ID, or when `id` is below the next ID or is the other peer's to open.
+    #[cfg(feature = "unstable")]
+    pub fn set_next_stream_id(&mut self, id: StreamId) -> Result<(), UserError> {
+        let next = self.ensure_next_stream_id()?;
+        let same_peer = id.is_server_initiated() == next.is_server_initiated();
+        if self.opened_stream || !same_peer || id < next {
+            return Err(UserError::NextStreamIdNotAllowed);
+        }
+        self.next_stream_id = Ok(id);
+        Ok(())
     }
 
     fn check_headers(fields: &http::HeaderMap) -> Result<(), UserError> {

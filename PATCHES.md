@@ -30,3 +30,26 @@ streams between the two, and curl does, so FAIM must be able to send them.
 FAIM's test of it is in `crates/faim-daemon/tests/integration/emulation.rs`: a stream
 opened between a server's two `GOAWAY`s is answered over the same connection. The
 release's own test suite isn't part of the published crate, so it doesn't run here.
+
+## A client connection can move its next stream id up before its first stream (#473)
+
+`src/client.rs`, `src/proto/streams/streams.rs`, `src/proto/streams/send.rs`,
+`src/codec/error.rs`.
+
+The release fixes a client connection's first stream id at the handshake
+(`Builder::initial_stream_id`). FAIM starts the connection once it has read a client's
+opening, and a client that sends its first request later, after FAIM's `SETTINGS`, may
+open it on a stream other than the one FAIM guessed: Firefox opens on 3. FAIM must send
+it on the client's id.
+
+- `SendRequest::set_next_stream_id`, behind the `unstable` feature like
+  `Builder::initial_stream_id`, sets the id the next stream takes, under the streams
+  lock (`Send::set_next_stream_id`). The streams after it take the ids after it.
+- It refuses, with the new `UserError::NextStreamIdNotAllowed` and the numbering left
+  as it was, once a stream has taken an id (`Send` records that in `opened_stream`), and
+  an id below the next one or of the other peer's parity.
+
+FAIM's tests of it are in `crates/faim-proxy/src/h2_leg.rs` (the setter and each
+refusal) and `crates/faim-daemon/tests/integration/emulation/first_stream.rs` (a
+client's first request, sent late on stream 3, reaches the server on 3). The release's own
+test suite isn't part of the published crate, so it doesn't run here.

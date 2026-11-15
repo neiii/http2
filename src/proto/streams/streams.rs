@@ -1041,6 +1041,14 @@ impl<B> Streams<B, client::Peer>
 where
     B: Buf,
 {
+    /// Makes `id` the ID the next stream opens with, before any has opened.
+    #[cfg(feature = "unstable")]
+    pub fn set_next_stream_id(&mut self, id: StreamId) -> Result<(), crate::Error> {
+        let mut me = self.inner.lock();
+        me.actions.send.set_next_stream_id(id)?;
+        Ok(())
+    }
+
     pub fn poll_pending_open(
         &mut self,
         cx: &Context,

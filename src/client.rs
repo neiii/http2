@@ -616,6 +616,24 @@ where
     pub fn num_wired_streams(&self) -> usize {
         self.inner.num_wired_streams()
     }
+
+    /// Sets the ID the next stream this connection opens takes, before it has
+    /// opened any: what [`Builder::initial_stream_id`] sets, once the
+    /// handshake is done.
+    ///
+    /// The streams after it take the IDs after it, two apart.
+    ///
+    /// # Errors
+    ///
+    /// Once a stream has opened, or when `stream_id` is even or below the ID
+    /// the next stream would take, or past the highest stream ID. The
+    /// numbering stays as it was.
+    pub fn set_next_stream_id(&mut self, stream_id: u32) -> Result<(), crate::Error> {
+        if stream_id > u32::from(StreamId::MAX) {
+            return Err(UserError::NextStreamIdNotAllowed.into());
+        }
+        self.inner.set_next_stream_id(stream_id.into())
+    }
 }
 
 // ===== impl ReadySendRequest =====
