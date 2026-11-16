@@ -79,3 +79,25 @@ ones (two `+0x9f0001` updates, then two `+0x9f0000` on each stream after), so no
 FAIM's tests of it are in `crates/faim-daemon/tests/integration/emulation/stream_windows.rs`:
 a body larger than the client's initial window, but within it once the client's update
 is counted, arrives whole, where the release would refuse it with `FLOW_CONTROL_ERROR`.
+
+## A stream's handles still release it once its connection has ended (#559)
+
+`src/proto/streams/streams.rs`, `src/proto/streams/recv.rs`.
+
+The release lets a stream's handles queue the stream after its connection has ended, in
+queues only a running connection takes streams back out of, so the stream stays in the
+store until the store drops. A debug build with the `unstable` feature, which FAIM needs
+for `SendRequest::set_next_stream_id`, asserts in `Store`'s `Drop` that no stream is
+left, and that assertion aborted FAIM's tests on Linux.
+
+- A reset once the connection has failed (`Actions::conn_error` is set) queues no reset
+  expiry. FAIM resets a request's stream when its client's body breaks off, which can
+  come after the server hung up.
+- Releasing received data queues a stream `WINDOW_UPDATE` only while the stream still
+  receives: the connection sends none for any other stream when it pops the queue, so
+  nothing changes on the wire. FAIM releases a response's data as it forwards it, and
+  data that arrived before the connection ended is still read after it.
+
+FAIM's tests of it are in faim-http's `crates/faim-proxy/tests/http2_fork.rs`: once a
+connection has ended at its server's EOF, a stream reset by its handle, and a response
+body read and released, leave no stream in the store when their handles drop.
