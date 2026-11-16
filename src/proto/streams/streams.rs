@@ -1744,7 +1744,13 @@ impl Actions {
                 counts,
                 &mut self.task,
             );
-            self.recv.enqueue_reset_expiration(stream, counts);
+            // FAIM (#559): the expiry only lets frames the peer sent before the reset
+            // through, and a failed connection reads no more frames. Its `recv_eof`, at
+            // EOF or when it drops, clears the queue once, and a stream queued after that
+            // would stay in it, and in the store, for good.
+            if self.conn_error.is_none() {
+                self.recv.enqueue_reset_expiration(stream, counts);
+            }
             // if a RecvStream is parked, ensure it's notified
             stream.notify_recv();
 

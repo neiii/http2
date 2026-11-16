@@ -478,7 +478,10 @@ impl Recv {
         let _res = stream.recv_flow.assign_capacity(capacity);
         debug_assert!(_res.is_ok());
 
-        if stream.recv_flow.unclaimed_capacity().is_some() {
+        // FAIM (#559): only a stream still receiving gets a WINDOW_UPDATE, as
+        // `send_stream_window_updates` decides when it pops one. Queued once the
+        // connection has ended, the stream would stay queued, and in the store, for good.
+        if stream.state.is_recv_streaming() && stream.recv_flow.unclaimed_capacity().is_some() {
             // Queue the stream for sending the WINDOW_UPDATE frame.
             self.pending_window_updates.push(stream);
 
